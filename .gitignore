@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.pythonlibs/
+ripped_tunes/*.mp3
+.venv/
+*.egg
