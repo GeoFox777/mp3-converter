@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MP3 Converter</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>MP3 Converter</h1>
+            <p class="subtitle">Convert YouTube and SoundCloud links to MP3</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" data-source="youtube">YouTube</button>
+            <button class="tab" data-source="soundcloud">SoundCloud</button>
+        </div>
+
+        <div class="converter-card">
+            <div class="input-group">
+                <input type="text" id="url-input" placeholder="Paste your YouTube link here..." autocomplete="off">
+                <button id="convert-btn" onclick="startConvert()">Convert</button>
+            </div>
+
+            <div id="status-area" class="status-area hidden">
+                <div id="progress-section" class="hidden">
+                    <div class="spinner"></div>
+                    <p id="status-text">Starting download...</p>
+                </div>
+
+                <div id="error-section" class="hidden">
+                    <div class="error-icon">!</div>
+                    <p id="error-text"></p>
+                </div>
+
+                <div id="download-section" class="hidden">
+                    <div class="success-icon">&#10003;</div>
+                    <p>Your MP3 is ready!</p>
+                    <div id="download-links"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <div class="info-card">
+                <h3>How to use</h3>
+                <ol>
+                    <li>Choose YouTube or SoundCloud above</li>
+                    <li>Paste the link to the video or track</li>
+                    <li>Click Convert and wait for the download</li>
+                    <li>Download your MP3 file</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
