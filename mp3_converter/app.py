@@ -118,28 +118,97 @@ def index():
     return render_template('index.html')
 
 
+def run_batch_download(batch_id, urls, source_type):
+    batch = jobs[batch_id]
+    batch['status'] = 'downloading'
+    batch['total'] = len(urls)
+    batch['completed_count'] = 0
+    batch['errors'] = []
+
+    for i, url in enumerate(urls):
+        sub_id = f"{batch_id}_{i}"
+        command = [
+            "yt-dlp",
+            "--extract-audio",
+            "--audio-format", "mp3",
+            "--no-playlist" if source_type == "soundcloud" else "",
+            "-o", os.path.join(DOWNLOAD_DIR, f"{sub_id}_%(title)s.%(ext)s"),
+            url
+        ]
+        command = [c for c in command if c]
+
+        try:
+            result = subprocess.run(command, capture_output=True, text=True, timeout=300)
+            if result.returncode == 0:
+                for f in os.listdir(DOWNLOAD_DIR):
+                    if f.startswith(sub_id) and f.endswith('.mp3') and f not in batch['files']:
+                        batch['files'].append(f)
+            else:
+                error_msg = result.stderr or result.stdout or 'Unknown error'
+                batch['errors'].append(f"Link {i+1}: {error_msg[:200]}")
+        except subprocess.TimeoutExpired:
+            batch['errors'].append(f"Link {i+1}: Timed out after 5 minutes")
+        except Exception as e:
+            batch['errors'].append(f"Link {i+1}: {str(e)[:200]}")
+
+        batch['completed_count'] = i + 1
+        batch['status_detail'] = f"Processing {i+1} of {len(urls)}..."
+
+    if batch['files']:
+        batch['status'] = 'complete'
+        t = threading.Thread(target=cleanup_job, args=(batch_id, batch['files']), daemon=True)
+        t.start()
+    elif batch['errors']:
+        batch['status'] = 'error'
+        batch['error'] = '\n'.join(batch['errors'])
+    else:
+        batch['status'] = 'error'
+        batch['error'] = 'No MP3 files were created. The sources may not be supported.'
+
+
 @app.route('/api/convert', methods=['POST'])
 def convert():
     data = request.get_json()
-    url = data.get('url', '').strip()
+    raw_urls = data.get('urls', [])
+    single_url = data.get('url', '').strip()
     source_type = data.get('source', 'youtube')
 
-    if not url:
-        return jsonify({'error': 'Please provide a URL'}), 400
+    if single_url and not raw_urls:
+        raw_urls = [single_url]
+
+    urls = [u.strip() for u in raw_urls if u.strip()]
+
+    if not urls:
+        return jsonify({'error': 'Please provide at least one URL'}), 400
+
+    if len(urls) > 20:
+        return jsonify({'error': 'Maximum 20 links at a time'}), 400
 
     if source_type not in ('youtube', 'soundcloud'):
         return jsonify({'error': 'Invalid source type'}), 400
 
-    if not validate_url(url, source_type):
-        if source_type == 'youtube':
-            return jsonify({'error': 'Please provide a valid YouTube URL'}), 400
-        else:
-            return jsonify({'error': 'Please provide a valid SoundCloud URL'}), 400
+    invalid = []
+    for i, url in enumerate(urls):
+        if not validate_url(url, source_type):
+            invalid.append(i + 1)
+
+    if invalid:
+        label = 'YouTube' if source_type == 'youtube' else 'SoundCloud'
+        if len(invalid) == len(urls):
+            return jsonify({'error': f'Please provide valid {label} URLs'}), 400
+        return jsonify({'error': f'Invalid {label} URL(s) at line(s): {", ".join(str(n) for n in invalid)}'}), 400
 
     job_id = str(uuid.uuid4())[:8]
-    jobs[job_id] = {'status': 'queued', 'files': [], 'error': None, 'created': time.time()}
+    jobs[job_id] = {
+        'status': 'queued', 'files': [], 'error': None, 'errors': [],
+        'created': time.time(), 'total': len(urls), 'completed_count': 0,
+        'status_detail': f'Queued {len(urls)} link(s)...'
+    }
 
-    thread = threading.Thread(target=run_download, args=(job_id, url, source_type), daemon=True)
+    if len(urls) == 1:
+        thread = threading.Thread(target=run_download, args=(job_id, urls[0], source_type), daemon=True)
+    else:
+        thread = threading.Thread(target=run_batch_download, args=(job_id, urls, source_type), daemon=True)
     thread.start()
 
     return jsonify({'job_id': job_id})
@@ -153,7 +222,11 @@ def status(job_id):
     return jsonify({
         'status': job['status'],
         'files': job['files'],
-        'error': job['error']
+        'error': job['error'],
+        'total': job.get('total', 1),
+        'completed_count': job.get('completed_count', 0),
+        'status_detail': job.get('status_detail', ''),
+        'errors': job.get('errors', [])
     })
 
 
@@ -168,4 +241,4 @@ def download_file(job_id, filename):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=False)

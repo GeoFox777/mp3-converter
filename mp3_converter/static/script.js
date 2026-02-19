@@ -2,8 +2,8 @@ let currentSource = 'youtube';
 let polling = null;
 
 const placeholders = {
-    youtube: 'Paste your YouTube link here...',
-    soundcloud: 'Paste your SoundCloud link here...'
+    youtube: 'Paste your YouTube link(s) here — one per line...',
+    soundcloud: 'Paste your SoundCloud link(s) here — one per line...'
 };
 
 document.querySelectorAll('.tab').forEach(tab => {
@@ -16,27 +16,34 @@ document.querySelectorAll('.tab').forEach(tab => {
     });
 });
 
-document.getElementById('url-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') startConvert();
-});
-
 function resetUI() {
     document.getElementById('status-area').classList.add('hidden');
     document.getElementById('progress-section').classList.add('hidden');
     document.getElementById('error-section').classList.add('hidden');
     document.getElementById('download-section').classList.add('hidden');
+    document.getElementById('progress-bar-container').classList.add('hidden');
+    document.getElementById('progress-detail').textContent = '';
+    document.getElementById('download-warnings').classList.add('hidden');
     if (polling) {
         clearInterval(polling);
         polling = null;
     }
 }
 
-function showProgress(msg) {
+function showProgress(msg, total, completed) {
     document.getElementById('status-area').classList.remove('hidden');
     document.getElementById('progress-section').classList.remove('hidden');
     document.getElementById('error-section').classList.add('hidden');
     document.getElementById('download-section').classList.add('hidden');
     document.getElementById('status-text').textContent = msg;
+
+    if (total > 1) {
+        const bar = document.getElementById('progress-bar-container');
+        bar.classList.remove('hidden');
+        const pct = Math.round((completed / total) * 100);
+        document.getElementById('progress-bar').style.width = pct + '%';
+        document.getElementById('progress-detail').textContent = completed + ' of ' + total + ' completed';
+    }
 }
 
 function showError(msg) {
@@ -47,17 +54,32 @@ function showError(msg) {
     document.getElementById('error-text').textContent = msg;
 }
 
-function showDownloads(jobId, files) {
+function showDownloads(jobId, files, errors) {
     document.getElementById('status-area').classList.remove('hidden');
     document.getElementById('progress-section').classList.add('hidden');
     document.getElementById('error-section').classList.add('hidden');
     document.getElementById('download-section').classList.remove('hidden');
 
+    const summary = document.getElementById('download-summary');
+    if (files.length === 1) {
+        summary.textContent = 'Your MP3 is ready!';
+    } else {
+        summary.textContent = files.length + ' MP3 files are ready!';
+    }
+
+    const warnings = document.getElementById('download-warnings');
+    if (errors && errors.length > 0) {
+        warnings.classList.remove('hidden');
+        warnings.textContent = 'Some links had issues: ' + errors.join(' | ');
+    } else {
+        warnings.classList.add('hidden');
+    }
+
     const container = document.getElementById('download-links');
     container.innerHTML = '';
 
     files.forEach(file => {
-        const displayName = file.replace(/^[a-f0-9]{8}_/, '').replace(/\.mp3$/, '');
+        const displayName = file.replace(/^[a-f0-9]{8}(_\d+)?_/, '').replace(/\.mp3$/, '');
         const link = document.createElement('a');
         link.href = '/api/download/' + jobId + '/' + encodeURIComponent(file);
         link.className = 'download-link';
@@ -68,14 +90,26 @@ function showDownloads(jobId, files) {
 }
 
 async function startConvert() {
-    const url = document.getElementById('url-input').value.trim();
-    if (!url) {
-        showError('Please paste a link first.');
+    const raw = document.getElementById('url-input').value.trim();
+    if (!raw) {
+        showError('Please paste at least one link.');
+        return;
+    }
+
+    const urls = raw.split('\n').map(u => u.trim()).filter(u => u.length > 0);
+    if (urls.length === 0) {
+        showError('Please paste at least one link.');
+        return;
+    }
+
+    if (urls.length > 20) {
+        showError('Maximum 20 links at a time. You have ' + urls.length + '.');
         return;
     }
 
     resetUI();
-    showProgress('Starting conversion...');
+    const label = urls.length === 1 ? 'Starting conversion...' : 'Starting conversion of ' + urls.length + ' links...';
+    showProgress(label, urls.length, 0);
 
     const btn = document.getElementById('convert-btn');
     btn.disabled = true;
@@ -84,7 +118,7 @@ async function startConvert() {
         const resp = await fetch('/api/convert', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, source: currentSource })
+            body: JSON.stringify({ urls, source: currentSource })
         });
 
         const data = await resp.json();
@@ -95,8 +129,8 @@ async function startConvert() {
             return;
         }
 
-        showProgress('Downloading and converting to MP3...');
-        pollStatus(data.job_id);
+        showProgress('Downloading and converting to MP3...', urls.length, 0);
+        pollStatus(data.job_id, urls.length);
 
     } catch (err) {
         showError('Could not connect to the server.');
@@ -104,7 +138,7 @@ async function startConvert() {
     }
 }
 
-function pollStatus(jobId) {
+function pollStatus(jobId, total) {
     polling = setInterval(async () => {
         try {
             const resp = await fetch('/api/status/' + jobId);
@@ -113,7 +147,7 @@ function pollStatus(jobId) {
             if (data.status === 'complete') {
                 clearInterval(polling);
                 polling = null;
-                showDownloads(jobId, data.files);
+                showDownloads(jobId, data.files, data.errors);
                 document.getElementById('convert-btn').disabled = false;
             } else if (data.status === 'error') {
                 clearInterval(polling);
@@ -121,7 +155,8 @@ function pollStatus(jobId) {
                 showError(data.error || 'An error occurred during conversion.');
                 document.getElementById('convert-btn').disabled = false;
             } else {
-                showProgress('Downloading and converting to MP3...');
+                const msg = data.status_detail || 'Downloading and converting to MP3...';
+                showProgress(msg, data.total || total, data.completed_count || 0);
             }
         } catch (err) {
             clearInterval(polling);

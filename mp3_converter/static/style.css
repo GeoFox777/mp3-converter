@@ -90,6 +90,10 @@ header h1 {
     font-size: 0.95rem;
     outline: none;
     transition: border-color 0.25s ease;
+    resize: vertical;
+    min-height: 52px;
+    font-family: inherit;
+    line-height: 1.5;
 }
 
 #url-input:focus {
@@ -98,6 +102,13 @@ header h1 {
 
 #url-input::placeholder {
     color: #666;
+}
+
+.input-hint {
+    color: #666;
+    font-size: 0.8rem;
+    margin-top: 8px;
+    text-align: center;
 }
 
 #convert-btn {
@@ -156,6 +167,30 @@ header h1 {
     font-size: 0.95rem;
 }
 
+#progress-bar-container {
+    width: 80%;
+    max-width: 400px;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    margin: 12px auto 0;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 4px;
+    transition: width 0.4s ease;
+    width: 0%;
+}
+
+.progress-detail {
+    color: #777;
+    font-size: 0.82rem;
+    margin-top: 6px;
+}
+
 .error-icon {
     width: 44px;
     height: 44px;
@@ -189,6 +224,19 @@ header h1 {
     margin: 0 auto 12px;
     font-size: 1.4rem;
     color: #fff;
+}
+
+#download-warnings {
+    background: rgba(231, 76, 60, 0.15);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 12px;
+    text-align: left;
+    font-size: 0.82rem;
+    color: #e88;
+    max-height: 120px;
+    overflow-y: auto;
 }
 
 #download-links {
