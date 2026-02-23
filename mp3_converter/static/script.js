@@ -115,10 +115,11 @@ async function startConvert() {
     btn.disabled = true;
 
     try {
+        const browser = document.getElementById('browser-select').value;
         const resp = await fetch('/api/convert', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ urls, source: currentSource })
+            body: JSON.stringify({ urls, source: currentSource, browser })
         });
 
         const data = await resp.json();

@@ -65,18 +65,28 @@ def validate_url(url, source_type):
         return False
 
 
-def run_download(job_id, url, source_type):
-    jobs[job_id]['status'] = 'downloading'
+SUPPORTED_BROWSERS = {'chrome', 'firefox', 'edge', 'safari', 'opera', 'brave', 'chromium', 'vivaldi'}
 
+
+def build_command(output_prefix, url, source_type, browser=None):
     command = [
         "yt-dlp",
         "--extract-audio",
         "--audio-format", "mp3",
-        "--no-playlist" if source_type == "soundcloud" else "",
-        "-o", os.path.join(DOWNLOAD_DIR, f"{job_id}_%(title)s.%(ext)s"),
-        url
     ]
-    command = [c for c in command if c]
+    if source_type == "soundcloud":
+        command.append("--no-playlist")
+    if browser and browser in SUPPORTED_BROWSERS:
+        command.extend(["--cookies-from-browser", browser])
+    command.extend(["-o", os.path.join(DOWNLOAD_DIR, f"{output_prefix}_%(title)s.%(ext)s")])
+    command.append(url)
+    return command
+
+
+def run_download(job_id, url, source_type, browser=None):
+    jobs[job_id]['status'] = 'downloading'
+
+    command = build_command(job_id, url, source_type, browser)
 
     try:
         result = subprocess.run(
@@ -118,7 +128,7 @@ def index():
     return render_template('index.html')
 
 
-def run_batch_download(batch_id, urls, source_type):
+def run_batch_download(batch_id, urls, source_type, browser=None):
     batch = jobs[batch_id]
     batch['status'] = 'downloading'
     batch['total'] = len(urls)
@@ -127,15 +137,7 @@ def run_batch_download(batch_id, urls, source_type):
 
     for i, url in enumerate(urls):
         sub_id = f"{batch_id}_{i}"
-        command = [
-            "yt-dlp",
-            "--extract-audio",
-            "--audio-format", "mp3",
-            "--no-playlist" if source_type == "soundcloud" else "",
-            "-o", os.path.join(DOWNLOAD_DIR, f"{sub_id}_%(title)s.%(ext)s"),
-            url
-        ]
-        command = [c for c in command if c]
+        command = build_command(sub_id, url, source_type, browser)
 
         try:
             result = subprocess.run(command, capture_output=True, text=True, timeout=300)
@@ -198,6 +200,10 @@ def convert():
             return jsonify({'error': f'Please provide valid {label} URLs'}), 400
         return jsonify({'error': f'Invalid {label} URL(s) at line(s): {", ".join(str(n) for n in invalid)}'}), 400
 
+    browser = data.get('browser', '').strip().lower()
+    if browser and browser not in SUPPORTED_BROWSERS:
+        browser = ''
+
     job_id = str(uuid.uuid4())[:8]
     jobs[job_id] = {
         'status': 'queued', 'files': [], 'error': None, 'errors': [],
@@ -206,9 +212,9 @@ def convert():
     }
 
     if len(urls) == 1:
-        thread = threading.Thread(target=run_download, args=(job_id, urls[0], source_type), daemon=True)
+        thread = threading.Thread(target=run_download, args=(job_id, urls[0], source_type, browser or None), daemon=True)
     else:
-        thread = threading.Thread(target=run_batch_download, args=(job_id, urls, source_type), daemon=True)
+        thread = threading.Thread(target=run_batch_download, args=(job_id, urls, source_type, browser or None), daemon=True)
     thread.start()
 
     return jsonify({'job_id': job_id})
@@ -241,4 +247,4 @@ def download_file(job_id, filename):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5001, debug=False)

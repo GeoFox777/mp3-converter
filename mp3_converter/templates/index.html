@@ -23,6 +23,21 @@
                 <textarea id="url-input" rows="3" placeholder="Paste your YouTube link(s) here — one per line..." autocomplete="off"></textarea>
                 <button id="convert-btn" onclick="startConvert()">Convert</button>
             </div>
+            <div class="options-row">
+                <label class="option-label" for="browser-select">Use cookies from:</label>
+                <select id="browser-select">
+                    <option value="">None (default)</option>
+                    <option value="chrome">Chrome</option>
+                    <option value="firefox">Firefox</option>
+                    <option value="edge">Edge</option>
+                    <option value="safari">Safari</option>
+                    <option value="brave">Brave</option>
+                    <option value="opera">Opera</option>
+                    <option value="chromium">Chromium</option>
+                    <option value="vivaldi">Vivaldi</option>
+                </select>
+                <span class="option-hint">Required for age-restricted videos</span>
+            </div>
             <p class="input-hint">Paste one link or multiple links, one per line (max 20)</p>
 
             <div id="status-area" class="status-area hidden">
